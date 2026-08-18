@@ -189,11 +189,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!selectedCountryCode) return;
 
     //Fetch country details to get capital city
-    const res = await fetch(`https://restcountries.com/v3.1/alpha/${selectedCountryCode}`);
-    const [country] = await res.json();
+    const country = await getCountryByCode(selectedCountryCode);
+
+    if (!country) {
+      showToast("Failed to load country details", "error");
+      return;
+    }
     
     //Update selected city to capital
-    selectedCity = country.capital?.[0] || "";
+    selectedCity = country.capital || "";
     updateCity(selectedCity);
   });
 
@@ -229,26 +233,48 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  //Fetch country using code API
+  async function getCountryByCode(code) {
+  try {
+    const res = await fetch(`https://countries.dev/alpha/${code}?full=true`);
+
+    if (!res.ok) {
+      throw new Error(`Country API error: ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    console.log("COUNTRY DATA:", data);
+
+    return data;
+
+    } catch (error) {
+      console.error("Failed to fetch country:", error);
+      return null;
+    }
+  }
+
   //Load country details into dashboard
   async function loadCountryDetails(code) {
-    const res = await fetch(`https://restcountries.com/v3.1/alpha/${code}`);
-    const [country] = await res.json();
+  const country = await getCountryByCode(code);
 
+  if (!country) {
+    showToast("Failed to load country details", "error");
+    return;
+  }
     //Update dashboard with country details
     updateDashboard(country);
-    updateCity(country.capital?.[0]);
+    updateCity(country.capital);
     updateHolidays(code);
   }
 
   //Get calling code from country data
   function getCallingCode(country) {
-
     //Return N/A if no calling code
-    if (!country.idd?.root) return "N/A";
-
-    //Combine root and first suffix
-    const suffix = country.idd.suffixes?.[0] || "";
-    return country.idd.root + suffix;
+    if (!country.callingCodes || country.callingCodes.length === 0) {
+    return "N/A";
+  }
+  return "+" + country.callingCodes[0];
   }
 
   //Update city select options
@@ -318,83 +344,100 @@ document.addEventListener("DOMContentLoaded", () => {
   //Initial saved count update
   updateSavedCount();
 
-    //Update dashboard with country details
+  // Update dashboard with country details
   function updateDashboard(country) {
-    //Country code in lowercase for flag URLs
-    const code = country.cca2.toLowerCase();
+    // Country code in lowercase for flag URLs
+    const code = country.alpha2Code?.toLowerCase() || "";
 
-    //Flags
+    // Flags
     flagSmall.src = `https://flagcdn.com/w80/${code}.png`;
     flagLarge.src = `https://flagcdn.com/w160/${code}.png`;
 
-    //Names and capital
-    countryName.textContent = country.name.common;
-    cityName.textContent = "• " + (country.capital?.[0] || "N/A");
+    // Names and capital
+    countryName.textContent = country.name || "N/A";
+    cityName.textContent = "• " + (country.capital || "N/A");
 
-    //Country title
+    // Country title
     document.querySelector(".dashboard-country-title h3").textContent =
-      country.name.common;
+      country.name || "N/A";
 
-    //Official name
+    // Official name
     document.querySelector(".official-name").textContent =
-      country.name.official;
+      country.officialName || country.name || "N/A";
 
-    //Region and Subregion
+    // Region and Subregion
     document.querySelector(".region").innerHTML =
-      `<i class="fa-solid fa-location-dot"></i> ${country.region} • ${country.subregion || ""}`;
+      `<i class="fa-solid fa-location-dot"></i> ${country.region || "N/A"} • ${country.subregion || ""}`;
 
-    //Details grid
-    const values = document.querySelectorAll(".dashboard-country-detail .value");
+    // Details grid
+    const values = document.querySelectorAll(
+      ".dashboard-country-detail .value"
+    );
 
-    //Populate details
-    values[0].textContent = country.capital?.[0] || "N/A";
-    values[1].textContent = country.population.toLocaleString();
-    values[2].textContent = country.area.toLocaleString() + " km²";
-    values[3].textContent = country.region;
-    values[4].textContent = getCallingCode(country); // calling code optional
+    // Populate details
+    values[0].textContent = country.capital || "N/A";
+    values[1].textContent = country.population
+      ? country.population.toLocaleString()
+      : "N/A";
+    values[2].textContent = country.area
+      ? country.area.toLocaleString() + " km²"
+      : "N/A";
+    values[3].textContent = country.region || "N/A";
+    values[4].textContent = getCallingCode(country);
     values[5].textContent = country.car?.side || "N/A";
     values[6].textContent = "Monday";
 
-    //Currency
-    const currencyBox = document.querySelector(".dashboard-country-extra:nth-child(1) .extra-tags");
-  
-    //Clear previous currencies
+    // Currency
+    const currencyBox = document.querySelector(
+      ".dashboard-country-extra:nth-child(1) .extra-tags"
+    );
+
     currencyBox.innerHTML = "";
 
-    //Object.values to handle multiple currencies
-    Object.values(country.currencies || {}).forEach(c => {
-      currencyBox.innerHTML += `<span class="extra-tag">${c.name} (${c.symbol || ""})</span>`;
+    Object.values(country.currencies || {}).forEach((c) => {
+      currencyBox.innerHTML += `
+        <span class="extra-tag">
+          ${c.name || "N/A"} (${c.symbol || ""})
+        </span>
+      `;
     });
 
-    //Languages
-    const langBox = document.querySelector(".dashboard-country-extra:nth-child(2) .extra-tags");
+    // Languages
+    const langBox = document.querySelector(
+      ".dashboard-country-extra:nth-child(2) .extra-tags"
+    );
 
-    //Clear previous languages
     langBox.innerHTML = "";
-  
-    //Object.values to handle multiple languages
-    Object.values(country.languages || {}).forEach(l => {
-      langBox.innerHTML += `<span class="extra-tag">${l}</span>`;
+
+    Object.values(country.languages || {}).forEach((l) => {
+      langBox.innerHTML += `
+        <span class="extra-tag">${l.name || "N/A"}</span>
+      `;
     });
 
-    //Borders
-    const borderBox = document.querySelector(".dashboard-country-extra:nth-child(3) .extra-tags");
+    // Borders
+    const borderBox = document.querySelector(
+      ".dashboard-country-extra:nth-child(3) .extra-tags"
+    );
 
-    //Clear previous borders
     borderBox.innerHTML = "";
 
-    //List bordering countries
-    (country.borders || []).forEach(b => {
-      borderBox.innerHTML += `<span class="extra-tag border-tag">${b}</span>`;
+    (country.borders || []).forEach((b) => {
+      borderBox.innerHTML += `
+        <span class="extra-tag border-tag">${b}</span>
+      `;
     });
 
-    //Google Maps
-    document.querySelector(".btn-map-link").href = country.maps.googleMaps;
+    // Google Maps
+    if (country.maps?.googleMaps) {
+      document.querySelector(".btn-map-link").href =
+        country.maps.googleMaps;
+    }
 
-    //Local Time
+    // Local Time
     updateLocalTime(country.timezones?.[0]);
   }
-
+  
   //Global Search button click handler
   document.getElementById("global-search-btn").addEventListener("click", async () => {
     //Check if country is selected
@@ -416,9 +459,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementsByClassName("current-selection-badge")[0].classList.add("flex");
 
     //Fetch country details
-    const res = await fetch(`https://restcountries.com/v3.1/alpha/${selectedCountryCode}`);
-    const [country] = await res.json();
-    const countryName = country.name.common;
+    const country = await getCountryByCode(selectedCountryCode);
+    const countryName = country.name;
     const coords = await getCityCoordinates(selectedCity);
     const year = yearSelect.value;
     //Handle case where coordinates are not found
@@ -430,8 +472,8 @@ document.addEventListener("DOMContentLoaded", () => {
     selectedCityLat = coords.lat;
     selectedCityLon = coords.lon;
     //Use capitalInfo latlng if available, otherwise fallback to country latlng
-    const lat = country.capitalInfo?.latlng?.[0] || country.latlng[0];
-    const lon = country.capitalInfo?.latlng?.[1] || country.latlng[1];
+    const lat = country.latlng?.[0];
+    const lon = country.latlng?.[1];
 
     //Load Dashboard Details
     loadCountryDetails(selectedCountryCode);
@@ -444,9 +486,8 @@ document.addEventListener("DOMContentLoaded", () => {
     await loadHolidays(selectedCountryCode, countryName, year);
     await loadEvents(selectedCity, selectedCountryCode, countryName);
     await loadLongWeekends(selectedCountryCode, selectedCity,year, countryName);
-    await loadWeather(lat, lon, countryName, selectedCity || country.capital?.[0], selectedCountryCode);
+    await loadWeather(lat, lon, countryName, selectedCity || country.capital, selectedCountryCode);
     await loadSunTimes(lat, lon, new Date().toISOString().split('T')[0], selectedCity, selectedCountryCode, countryName);
-
 
     //Show success toast
     showToast(`Exploring ${selectedCity || selectedCountryCode}!`, "success");
@@ -462,7 +503,6 @@ document.addEventListener("DOMContentLoaded", () => {
     //Hide selected destination section
     document.getElementById("selected-destination").style.display = "none";
     document.getElementById("dashboard-country-info-section").style.display = "none";
-
 
     //Update global state and views
     isCountrySelected = false;
